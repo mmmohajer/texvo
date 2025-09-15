@@ -1,6 +1,5 @@
 general: {
   ws = true
   wss = false
-  ws_port = 8188
-  ws_interface = "0.0.0.0"
+  ws_port = 8288
 }
