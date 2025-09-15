@@ -7,6 +7,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "5349:5349"
     volumes:
       - ./volume_data/django_static:/vol/static
       - ./volume_data/to_be_served:/to_be_served
@@ -167,16 +168,10 @@ services:
       --min-port=20000
       --max-port=20100
       --no-stdout-log
-    # Uncomment these for production inside command above:
-    # --cert=/etc/coturn/certs/fullchain.pem
-    # --pkey=/etc/coturn/certs/privkey.pem
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
-      - "5349:5349/tcp"
       - "20000-20100:20000-20100/udp"
-    # volumes:
-    #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
 
   janus:
     build:
