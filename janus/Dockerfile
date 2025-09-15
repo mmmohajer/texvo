@@ -8,6 +8,10 @@ RUN apt-get update && apt-get install -y \
     autoconf \
     libtool \
     pkg-config \
+    cmake \
+    wget \
+    unzip \
+    # Janus dependencies
     libmicrohttpd-dev \
     libjansson-dev \
     libssl-dev \
@@ -21,17 +25,28 @@ RUN apt-get update && apt-get install -y \
     libwebsockets-dev \
     libcurl4-openssl-dev \
     libnanomsg-dev \
-    cmake \
-    wget \
+    libconfig-dev \
+    libnice-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
 
-# Clone Janus
+# ------------------------------------------------
+# Build libusrsctp (for data channels support)
+# ------------------------------------------------
+RUN git clone https://github.com/sctplab/usrsctp.git && \
+    cd usrsctp && \
+    ./bootstrap && \
+    ./configure && \
+    make -j$(nproc) && \
+    make install
+
+# ------------------------------------------------
+# Build Janus Gateway
+# ------------------------------------------------
 RUN git clone https://github.com/meetecho/janus-gateway.git
 WORKDIR /opt/janus-gateway
 
-# Build Janus with WebSockets enabled
 RUN sh autogen.sh && \
     ./configure --prefix=/usr/local \
                 --enable-websockets \
@@ -41,7 +56,8 @@ RUN sh autogen.sh && \
     make install && \
     make configs
 
-# Expose ports
+# Expose Janus ports
 EXPOSE 8188 8088 10000-10200/udp
 
+# Start Janus
 CMD ["janus", "-F", "/usr/local/etc/janus"]

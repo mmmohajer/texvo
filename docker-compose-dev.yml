@@ -181,8 +181,9 @@ services:
     #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
 
   janus:
-    image: canyan/janus-gateway:latest
-    platform: linux/amd64
+    build:
+      dockerfile: Dockerfile
+      context: ./janus
     restart: always
     ports:
       - "8188:8188"
