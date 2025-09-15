@@ -1,0 +1,10 @@
+services:
+  janus:
+    image: canyan/janus-gateway:latest
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "10000-10200:10000-10200/udp"
+    volumes:
+      - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+      - ./janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
