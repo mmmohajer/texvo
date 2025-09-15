@@ -443,6 +443,10 @@ Update the following files from their sample files:
 - `utils/assistances/backup_db_swarm.sh`
 - `utils/shellScripting/funcs/secret_vars.sh`
 
+Update the following file in your local system:
+
+- `utils/shellScripting/funcs/secret_vars.sh`
+
 ### 10.3. Set Executable Permissions
 
 ```sh
@@ -534,6 +538,12 @@ In the server run
 
 ```sh
 docker login -u DOCKER_HUB_USER_NAME
+```
+
+In the server:
+
+```sh
+docker network rm app_default
 ```
 
 #### 11.2.2. Join Worker Nodes
