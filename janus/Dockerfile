@@ -1,0 +1,47 @@
+FROM debian:bullseye
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    automake \
+    autoconf \
+    libtool \
+    pkg-config \
+    libmicrohttpd-dev \
+    libjansson-dev \
+    libssl-dev \
+    libsrtp2-dev \
+    libsofia-sip-ua-dev \
+    libglib2.0-dev \
+    libopus-dev \
+    libogg-dev \
+    libini-config-dev \
+    libcollection-dev \
+    libwebsockets-dev \
+    libcurl4-openssl-dev \
+    libnanomsg-dev \
+    cmake \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# Clone Janus
+RUN git clone https://github.com/meetecho/janus-gateway.git
+WORKDIR /opt/janus-gateway
+
+# Build Janus with WebSockets enabled
+RUN sh autogen.sh && \
+    ./configure --prefix=/usr/local \
+                --enable-websockets \
+                --disable-docs \
+                --enable-data-channels && \
+    make -j$(nproc) && \
+    make install && \
+    make configs
+
+# Expose ports
+EXPOSE 8188 8088 10000-10200/udp
+
+CMD ["janus", "-F", "/usr/local/etc/janus"]
