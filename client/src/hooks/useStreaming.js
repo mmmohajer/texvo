@@ -71,7 +71,7 @@ const useStreaming = ({ roomId, replaceWithBlackTrack = false }) => {
   const [allMuted, setAllMuted] = useState(false);
 
   const ICE_SERVERS = [
-    { urls: "stun:stun.l.google.com:19302" },
+    // { urls: "stun:stun.l.google.com:19302" },
     {
       urls: `turn:${ICE_SERVER_DOMAIN}:3478?transport=udp`,
       username: TURN_USER_NAME,

@@ -16,8 +16,8 @@ media: {
 
 nat: {
   # Public STUN server
-  stun_server = "stun.l.google.com"
-  stun_port   = 19302
+  # stun_server = "stun.l.google.com"
+  # stun_port   = 19302
 
   # Your TURN (coturn) server inside Docker
   turn_server = "coturn"
