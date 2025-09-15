@@ -1,6 +1,6 @@
 FROM debian:bullseye
 
-# Install dependencies
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
@@ -22,7 +22,6 @@ RUN apt-get update && apt-get install -y \
     libogg-dev \
     libini-config-dev \
     libcollection-dev \
-    libwebsockets-dev \
     libcurl4-openssl-dev \
     libnanomsg-dev \
     libconfig-dev \
@@ -32,7 +31,18 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /opt
 
 # ------------------------------------------------
-# Build libusrsctp (for data channels support)
+# Build libwebsockets from source (stable v4.3.2)
+# ------------------------------------------------
+RUN git clone https://github.com/warmcat/libwebsockets.git && \
+    cd libwebsockets && \
+    git checkout v4.3.2 && \
+    mkdir build && cd build && \
+    cmake -DLWS_WITHOUT_TESTAPPS=ON -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
+    make -j$(nproc) && \
+    make install
+
+# ------------------------------------------------
+# Build libusrsctp (for DataChannels support)
 # ------------------------------------------------
 RUN git clone https://github.com/sctplab/usrsctp.git && \
     cd usrsctp && \
@@ -41,11 +51,11 @@ RUN git clone https://github.com/sctplab/usrsctp.git && \
     make -j$(nproc) && \
     make install
 
-# Ensure libusrsctp is in runtime path
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/usrsctp.conf && ldconfig
+# Ensure runtime linker can find installed libs
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf && ldconfig
 
 # ------------------------------------------------
-# Build Janus Gateway
+# Build Janus Gateway (latest stable)
 # ------------------------------------------------
 RUN git clone https://github.com/meetecho/janus-gateway.git
 WORKDIR /opt/janus-gateway
@@ -53,14 +63,18 @@ WORKDIR /opt/janus-gateway
 RUN sh autogen.sh && \
     ./configure --prefix=/usr/local \
                 --enable-websockets \
-                --disable-docs \
-                --enable-data-channels && \
+                --enable-data-channels \
+                --disable-docs && \
     make -j$(nproc) && \
     make install && \
     make configs
 
-# Expose Janus ports
+# ------------------------------------------------
+# Expose required ports
+# ------------------------------------------------
 EXPOSE 8188 8088 10000-10200/udp
 
-# Start Janus
+# ------------------------------------------------
+# Run Janus
+# ------------------------------------------------
 CMD ["janus", "-F", "/usr/local/etc/janus"]
