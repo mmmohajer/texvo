@@ -186,13 +186,12 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
-    # ports:
-    #   - "3478:3478/udp"
-    #   - "3478:3478/tcp"
-    #   - "20000-20100:20000-20100/udp"
-    # networks:
-    #   - appnetwork
-    network_mode: host
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "20000-20100:20000-20100/udp"
+    networks:
+      - appnetwork
     command:
       [
         "turnserver",
