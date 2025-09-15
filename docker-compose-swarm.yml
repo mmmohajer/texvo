@@ -196,16 +196,19 @@ services:
       - "20000-20100:20000-20100/udp"
     networks:
       - appnetwork
-    command: >
-      turnserver -n
-      --lt-cred-mech
-      --realm=${COTURN_REALM}
-      --user=${COTURN_USER}:${COTURN_PASSWORD}
-      --external-ip=${COTURN_EXTERNAL_IP}
-      --log-file=stdout
-      --min-port=20000
-      --max-port=20100
-      --no-stdout-log
+    command:
+      [
+        "turnserver",
+        "-n",
+        "--lt-cred-mech",
+        "--realm=${COTURN_REALM}",
+        "--user=${COTURN_USER}:${COTURN_PASSWORD}",
+        "--external-ip=${COTURN_EXTERNAL_IP}",
+        "--log-file=stdout",
+        "--min-port=20000",
+        "--max-port=20100",
+        "--no-stdout-log",
+      ]
   janus:
     image: ${JANUS_REPO}:${JANUS_VERSION}
     deploy:
