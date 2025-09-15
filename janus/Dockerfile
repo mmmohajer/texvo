@@ -41,6 +41,9 @@ RUN git clone https://github.com/sctplab/usrsctp.git && \
     make -j$(nproc) && \
     make install
 
+# Ensure libusrsctp is in runtime path
+RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/usrsctp.conf && ldconfig
+
 # ------------------------------------------------
 # Build Janus Gateway
 # ------------------------------------------------
