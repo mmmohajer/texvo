@@ -429,6 +429,9 @@ mkdir -p ./api/vol/static ./api/vol/media ./db_backups ./volume_data volume_data
 
 Update the following files from their sample files:
 
+Find the google processor ID from here:
+https://console.cloud.google.com/ai/document-ai/locations/us/processors/
+
 - `.env`
 - `secrets/api/.env`
 - `secrets/db/.env`
@@ -546,6 +549,22 @@ In the server:
 docker network rm app_default
 ```
 
+Now use `automation.sh` to deploy automatically with swarm.
+
+To make it scalable then create a load balancer in DO: (For simplicity Regioanl based):
+
+Forwarding rules
+HTTP on port 80 HTTP on port 80
+HTTPS on port 443 HTTPS on port 443
+
+Health checks
+http://0.0.0.0:80/health
+
+SSL
+Redirect HTTP to HTTPS
+
+It's now time to onboard a new node
+
 #### 11.2.2. Join Worker Nodes
 
 On each worker node:
@@ -592,7 +611,35 @@ When you add another server to the GlusterFS cluster, do the steps done in secti
 
 ```bash
 sudo gluster peer probe <NEW_NODE_IP>
+sudo gluster volume add-brick app-volume <NEW_NODE_IP>:/gluster/brick1/app-volume force
+sudo gluster volume rebalance app-volume start
+sudo gluster volume rebalance app-volume status
 ```
+
+Then on the new node:
+
+```bash
+sudo mount -t glusterfs <ANY_EXISTING_NODE_IP>:/app-volume /var/www/app
+```
+
+Then automate it on reboot:
+
+```bash
+sudo nano /etc/fstab
+```
+
+```ini
+<ANY_EXISTING_NODE_IP>:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
+```
+
+```bash
+sudo find /var/www/app -type d -user mmmohajer -group docker -exec ls -ld {} \;
+sudo find /var/www/app -type d -user mmmohajer -group docker -exec chown -R mmmohajer:mmmohajer {} \;
+
+```
+
+sudo chown -R mmmohajer:mmmohajer /var/www/app
+sudo chown -R mmmohajer:certbot /var/www/app/nginx/certbot
 
 ### 11.3.2. Expand the Volume (if adding replicas)
 

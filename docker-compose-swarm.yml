@@ -114,8 +114,6 @@ services:
   pgbouncer:
     restart: always
     image: edoburu/pgbouncer:v1.23.1-p2
-    ports:
-      - "6432:6432"
     env_file:
       - ./secrets/pgbouncer/.env
     networks:
@@ -130,8 +128,6 @@ services:
     image: ankane/pgvector:v0.5.1
     env_file:
       - ./secrets/db/.env
-    ports:
-      - "${DB_PORT}:5432"
     volumes:
       - ./volume_data/pgdata:/var/lib/postgresql/data
     networks:
@@ -190,12 +186,13 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
-    ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "20000-20100:20000-20100/udp"
-    networks:
-      - appnetwork
+    # ports:
+    #   - "3478:3478/udp"
+    #   - "3478:3478/tcp"
+    #   - "20000-20100:20000-20100/udp"
+    # networks:
+    #   - appnetwork
+    network_mode: host
     command:
       [
         "turnserver",
