@@ -124,8 +124,6 @@ services:
 
   pgbouncer:
     image: edoburu/pgbouncer:v1.23.1-p2
-    ports:
-      - "6432:6432"
     env_file:
       - ./secrets/pgbouncer/.env
     depends_on:
@@ -136,8 +134,6 @@ services:
     image: ankane/pgvector:v0.5.1
     env_file:
       - ./secrets/db/.env
-    ports:
-      - "${DB_PORT}:5432"
     volumes:
       - ./volume_data/pgdata:/var/lib/postgresql/data
       - ./db_backups:/db_backups
@@ -187,8 +183,6 @@ services:
     platform: linux/amd64
     restart: always
     ports:
-      - "8188:8188"
-      - "8088:8088"
       - "10000-10200:10000-10200/udp"
     volumes:
       - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
