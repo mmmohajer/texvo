@@ -190,6 +190,10 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "20000-20100:20000-20100/udp"
     networks:
       - appnetwork
     command: >
@@ -211,6 +215,8 @@ services:
         condition: on-failure
     networks:
       - appnetwork
+    ports:
+      - "10000-10200:10000-10200/udp"
     volumes:
       - ./janus/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
       - ./janus/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
