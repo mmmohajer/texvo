@@ -193,34 +193,19 @@ sudo apt autoremove
 ```sh
 sudo apt install ufw
 sudo ufw status verbose
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow ssh
-sudo ufw allow http
-sudo ufw allow https
-# For app/database
-sudo ufw allow 5432
-# For Docker Swarm
-sudo ufw allow 2377/tcp
-sudo ufw allow 7946/tcp
-sudo ufw allow 7946/udp
-sudo ufw allow 4789/udp
-# For GlusterFS
-sudo ufw allow 24007/tcp
-sudo ufw allow 24009:24024/tcp
-sudo ufw allow 38465:38467/tcp
-sudo ufw allow 49152:60999/tcp
-# For TURN/STUN (Coturn)
-sudo ufw allow 3478/udp     # STUN/TURN UDP
-sudo ufw allow 3478/tcp     # TURN TCP fallback
-sudo ufw allow 5349/tcp     # TURN over TLS (optional, enable when using SSL)
-sudo ufw allow 20000:20100/udp  # TURN relay media ports
+```
 
-# For Janus Gateway
-sudo ufw allow 8188/tcp     # Janus WebSocket
-sudo ufw allow 8088/tcp     # Janus REST API (optional, may restrict to internal only)
-sudo ufw allow 10000:10200/udp  # Janus RTP/RTCP media
+Then copy from your system to server using:
 
+```sh
+scp ./utils/shellScripting/funcs/setup_ufw.sh TexVoMaster1:/home/USER_NAME
+```
+
+Then in the server, run:
+
+```sh
+sudo chmod +x setup_ufw.sh
+sudo ./setup_ufw.sh
 sudo ufw enable
 sudo reboot
 ```
@@ -321,225 +306,35 @@ ssh -T git@github.com
 
 ---
 
----
+## 8. GlusterFS Setup
 
-## 8. Clone the Repository
-
-```sh
-cd /var
-mkdir -p www/app
-sudo chown USERNAME:USERNAME /var/www/app
-cd /var/www/app
-git clone SSH_REPO_URL .
-```
-
----
-
-## 9. Application Setup
-
-### 9.1. Create Required Folders
-
-```sh
-mkdir -p ./api/vol/static/
-mkdir -p ./api/vol/media/
-mkdir -p ./db_backups/
-mkdir -p ./volume_data/
-```
-
-### 9.2. Update Configuration Files
-
-Update the following files from their sample files:
-
-- `.env`
-- `secrets/api/.env`
-- `secrets/db/.env`
-- `secrets/pgbouncer/.env`
-- `secrets/secret_files/cloudflare.ini`
-- `secrets/secret_files/cred.json`
-- `client/next.config.js`
-- `redis/redis.conf`
-- `janus/janus.jcfg`
-- `nginx/configs/default.conf`
-- `init-letsencrypt.sh`
-- `utils/assistances/backup_db_swarm.sh`
-
-Then create the following subfolders:
-
-```sh
-sudo mkdir -p volume_data/django_static/media
-sudo mkdir -p volume_data/django_static/media
-```
-
-### 9.3. Set Executable Permissions
-
-```sh
-sudo chmod +x ./init-letsencrypt.sh
-sudo chmod +x /var/www/app/utils/assistances/backup_db_swarm.sh
-```
-
-### 9.4. Setup HTTP Basic Auth for Flower (Optional)
-
-```sh
-sudo apt-get install apache2-utils
-cd nginx
-htpasswd -c .htpasswd CELERY_FLOWER_USER
-# Use the CELERY_FLOWER_PASSWORD defined in your env variables
-```
-
-### 9.5. SSL Certificate Setup
-
-1. Create the following folders:
-   ```sh
-   mkdir -p ./nginx/certbot/conf/
-   mkdir -p ./nginx/certbot/www/
-   ```
-2. Add A records to your domain's DNS pointing to the server IP (including www as a CNAME).
-3. Run the script:
-   ```sh
-   sudo ./init-letsencrypt.sh
-   ```
-
-### 9.6. Clean Up Docker (Optional)
-
-```sh
-docker container rm -f $(docker container ls -a -q)
-docker image rm -f $(docker image ls -q)
-docker volume rm $(docker volume ls -q)
-```
-
-### 9.7. Test SSL Setup
-
-1. Update the domain in the server_name block of `default-temp-with-ssl.conf`.
-2. Set permissions:
-   ```sh
-   sudo chown -R USERNAME:USERNAME /var/www/app
-   sudo chown -R USERNAME:docker /var/www/app/nginx/certbot
-   ```
-3. Start the app with SSL:
-   ```sh
-   sudo docker compose -f docker-compose-temp-with-ssl.yml up --build -d
-   ```
-
-### 9.8. Production Deployment
-
-**With Compose:**
-
-```sh
-sudo docker compose -f docker-compose-prod.yml up --build -d
-```
-
----
-
-## 10. Docker Swarm & GlusterFS Deployment
-
-### 10.1. Swarm Architecture Overview
-
-- **Basic:** 1 Manager Node, 2 Worker Nodes
-- **High Availability:** 3+ Manager Nodes (for quorum), 3+ Worker Nodes
-- **(Recommended)**: Use a load balancer in front of your managers for production.
-
----
-
-### 10.2. Swarm Cluster Setup
-
-#### 10.2.1. Initialize Swarm on Manager
-
-```sh
-docker swarm init --advertise-addr <MANAGER_IP>
-```
-
-#### 10.2.2. Join Worker Nodes
-
-On each worker node:
-
-```sh
-docker swarm join --token <WORKER_TOKEN> <MANAGER_IP>:2377
-```
-
-Get the join token from the manager:
-
-```sh
-docker swarm join-token worker
-```
-
-#### 10.2.3. Join Additional Manager Nodes (Optional)
-
-On the primary manager node, get the manager token:
-
-```sh
-docker swarm join-token manager
-```
-
-On the new manager node:
-
-```sh
-docker swarm join --token <MANAGER_TOKEN> <MANAGER_IP>:2377
-```
-
-#### 10.2.4. Verify Cluster
-
-On any manager node:
-
-```sh
-docker node ls
-```
-
----
-
-### 10.3. GlusterFS Setup
-
-#### 10.3.1. Install GlusterFS on All Nodes
+### 8.1 Install GlusterFS
 
 ```sh
 sudo apt update
 sudo apt install glusterfs-server -y
 sudo systemctl start glusterd
 sudo systemctl enable glusterd
-```
-
----
-
-### 10.4. Onboarding a New Node to GlusterFS Cluster
-
-#### 1. Prepare the New Node
-
-```sh
-sudo mkdir -p /gluster/brick1
-sudo chown -R <USER>:<USER> /gluster
-```
-
-#### 2. Add the New Node to the Cluster (from any existing node)
-
-```sh
-sudo gluster peer probe <NEW_NODE_IP>
-```
-
-#### 3. (If needed) Update the Volume to Include the New Node
-
-If expanding the replica set, create or expand the volume as needed:
-
-```sh
-sudo gluster volume create app-volume replica <REPLICA_COUNT> \
-  <NODE1_IP>:/gluster/brick1 \
-  <NODE2_IP>:/gluster/brick1 \
-  ... \
-  force
-sudo gluster volume start app-volume
-sudo gluster volume info
-```
-
-#### 4. Mount the GlusterFS Volume on the New Node
-
-```sh
+sudo systemctl status glusterd
 sudo apt install glusterfs-client -y
-sudo mkdir -p /var/www/app
-sudo chown <USER>:<USER> /var/www/app
-sudo mount -t glusterfs <NEW_NODE_IP>:/app-volume /var/www/app
+sudo mkdir -p /var/www/app/
+sudo chown -R USER_NAME:USER_NAME /var/www/app
+sudo mkdir -p /gluster/brick1/app-volume
+```
+
+You can create a snapshot of your server, to ignore repeating these setups for other nodes. After that let's continue to mount /var/www/app as follows:
+
+```sh
+sudo gluster volume create app-volume <NODE_IP>:/gluster/brick1/app-volume force
+sudo gluster volume start app-volume
+sudo mount -t glusterfs <NODE_IP>:/app-volume /var/www/app
 ```
 
 ##### (Optional) Auto-mount on Boot
 
-Add to `/etc/fstab`:
+```sh
+sudo nano /etc/fstab
+```
 
 ```
 <NEW_NODE_IP>:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
@@ -547,7 +342,9 @@ Add to `/etc/fstab`:
 
 ##### (Optional) Systemd Service for Mounting
 
-Create `/etc/systemd/system/mount-glusterfs.service`:
+```sh
+sudo nano /etc/systemd/system/mount-glusterfs.service
+```
 
 ```ini
 [Unit]
@@ -572,9 +369,11 @@ sudo systemctl enable mount-glusterfs.service
 
 ---
 
-### 10.5. GlusterFS Watchdog Service
+#### GlusterFS Watchdog Service
 
-Create `/etc/systemd/system/glusterfs-watchdog.service`:
+```sh
+sudo nano /etc/systemd/system/glusterfs-watchdog.service
+```
 
 ```ini
 [Unit]
@@ -589,14 +388,6 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-Reload and enable the service:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable glusterfs-watchdog
-sudo systemctl start glusterfs-watchdog
-```
-
 (Optional) Create a log file for the watchdog script:
 
 ```sh
@@ -606,7 +397,215 @@ sudo chmod 666 /var/log/glusterfs_watchdog.log
 
 ---
 
-### 10.6. Useful Docker Swarm Commands
+## 9. Clone the Repository
+
+```sh
+sudo chown -R USER_NAME:USERNAME /var/www/app
+cd /var/www/app
+git clone SSH_REPO_URL .
+```
+
+Reload and enable the automated services:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable mount-glusterfs.service
+sudo systemctl start mount-glusterfs.service
+sudo systemctl enable glusterfs-watchdog
+sudo systemctl start glusterfs-watchdog
+```
+
+---
+
+## 10. Application Setup
+
+### 10.1. Create Required Folders
+
+```sh
+mkdir -p ./api/vol/static ./api/vol/media ./db_backups ./volume_data volume_data/django_static/static volume_data/django_static/media
+```
+
+### 10.2. Update Configuration Files
+
+Update the following files from their sample files:
+
+- `.env`
+- `secrets/api/.env`
+- `secrets/db/.env`
+- `secrets/pgbouncer/.env`
+- `secrets/secret_files/cloudflare.ini`
+- `secrets/secret_files/cred.json`
+- `client/next.config.js`
+- `redis/redis.conf`
+- `janus/janus.jcfg`
+- `nginx/configs/default.conf`
+- `init-letsencrypt.sh`
+- `utils/assistances/backup_db_swarm.sh`
+- `utils/shellScripting/funcs/secret_vars.sh`
+
+### 10.3. Set Executable Permissions
+
+```sh
+sudo chmod +x ./init-letsencrypt.sh
+sudo chmod +x /var/www/app/utils/assistances/backup_db_swarm.sh
+```
+
+### 10.4. Setup HTTP Basic Auth for Flower (Optional)
+
+```sh
+sudo apt-get install apache2-utils
+cd nginx
+htpasswd -c .htpasswd CELERY_FLOWER_USER
+# Use the CELERY_FLOWER_PASSWORD defined in your env variables
+```
+
+### 10.5. SSL Certificate Setup
+
+1. Create the following folders:
+   ```sh
+   mkdir -p ./nginx/certbot/conf/
+   mkdir -p ./nginx/certbot/www/
+   ```
+2. Add A records to your domain's DNS pointing to the server IP (including www as a CNAME).
+3. Run the script:
+   ```sh
+   sudo ./init-letsencrypt.sh
+   ```
+
+### 10.6. Clean Up Docker (Optional)
+
+```sh
+docker container rm -f $(docker container ls -a -q)
+docker image rm -f $(docker image ls -q)
+docker volume rm $(docker volume ls -q)
+```
+
+### 10.7. Test SSL Setup
+
+1. Update the domain in the server_name block of `default-temp-with-ssl.conf`.
+2. Set permissions:
+   ```sh
+   sudo chown -R USERNAME:USERNAME /var/www/app
+   sudo chown -R USERNAME:docker /var/www/app/nginx/certbot
+   ```
+3. Start the app with SSL:
+   ```sh
+   sudo docker compose -f docker-compose-temp-with-ssl.yml up --build -d
+   ```
+
+### 10.8. Production Deployment
+
+**With Compose:**
+
+```sh
+sudo docker compose -f docker-compose-prod.yml up --build -d
+```
+
+---
+
+## 11. Docker Swarm & GlusterFS Deployment
+
+### 11.1. Swarm Architecture Overview
+
+- **Basic:** 1 Manager Node, 2 Worker Nodes
+- **High Availability:** 3+ Manager Nodes (for quorum), 3+ Worker Nodes
+- **(Recommended)**: Use a load balancer in front of your managers for production.
+
+---
+
+### 11.2. Swarm Cluster Setup
+
+#### 11.2.1. Initialize Swarm on Manager
+
+```sh
+docker swarm init --advertise-addr <MANAGER_IP>
+```
+
+Go to docker hub and create 3 private repositories for the following services:
+
+1. Client
+2. API
+3. NGINX
+4. Janus
+
+Go to utils/shellScripting/constants/constants.sh and update the repository name and server alias
+
+In the server run
+
+```sh
+docker login -u DOCKER_HUB_USER_NAME
+```
+
+#### 11.2.2. Join Worker Nodes
+
+On each worker node:
+
+```sh
+docker swarm join --token <WORKER_TOKEN> <MANAGER_IP>:2377
+```
+
+Get the join token from the manager:
+
+```sh
+docker swarm join-token worker
+```
+
+#### 11.2.3. Join Additional Manager Nodes (Optional)
+
+On the primary manager node, get the manager token:
+
+```sh
+docker swarm join-token manager
+```
+
+On the new manager node:
+
+```sh
+docker swarm join --token <MANAGER_TOKEN> <MANAGER_IP>:2377
+```
+
+#### 11.2.4. Verify Cluster
+
+On any manager node:
+
+```sh
+docker node ls
+```
+
+---
+
+## 11.3. Onboarding a New Node
+
+When you add another server to the GlusterFS cluster, do the steps done in section 8 for volume mounting on the new node
+
+### 11.3.1. Probe the New Node (from an existing node)
+
+```bash
+sudo gluster peer probe <NEW_NODE_IP>
+```
+
+### 11.3.2. Expand the Volume (if adding replicas)
+
+```bash
+sudo gluster volume create app-volume replica <REPLICA_COUNT> \
+  <NODE1_IP>:/gluster/brick1 \
+  <NODE2_IP>:/gluster/brick1 \
+  ... \
+  force
+sudo gluster volume start app-volume
+sudo gluster volume info
+```
+
+## ✅ Final Checklist
+
+- GlusterFS running across all nodes.
+- App volume mounted automatically at boot.
+- Backup restored into `/var/www/app`.
+- Watchdog ensures recovery if Gluster goes down.
+
+---
+
+### 11.5. Useful Docker Swarm Commands
 
 - **List nodes:**
   ```sh
@@ -648,7 +647,7 @@ sudo chmod 666 /var/log/glusterfs_watchdog.log
 
 ---
 
-## 11. Continuous Integration & Continuous Deployment (CI/CD)
+## 12. Continuous Integration & Continuous Deployment (CI/CD)
 
 CI/CD (Continuous Integration and Continuous Deployment) is a set of practices that automate the process of integrating code changes, testing, and deploying applications. This ensures that new features, bug fixes, and updates can be delivered to users quickly, reliably, and with minimal manual intervention. In this project, you can use the provided automation script to streamline your deployment process.
 
