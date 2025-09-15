@@ -308,9 +308,9 @@ ssh-keygen -t rsa -b 4096 -C "Comment for the file"
 
 ```sh
 Host github.com
-    User GIT_USER_NAME
-    Hostname github.com
-    IdentityFile ~/.ssh/github_rsa
+User GIT_USER_NAME
+Hostname github.com
+IdentityFile ~/.ssh/github_rsa
 ```
 
 **Test the connection:**
@@ -354,8 +354,11 @@ Update the following files from their sample files:
 - `secrets/api/.env`
 - `secrets/db/.env`
 - `secrets/pgbouncer/.env`
+- `secrets/secret_files/cloudflare.ini`
+- `secrets/secret_files/cred.json`
 - `client/next.config.js`
 - `redis/redis.conf`
+- `janus/janus.jcfg`
 - `nginx/configs/default.conf`
 - `init-letsencrypt.sh`
 - `utils/assistances/backup_db_swarm.sh`
