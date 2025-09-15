@@ -3,7 +3,7 @@ import AppVideo from "@/baseComponents/reusableComponents/AppVideo";
 
 import useStreaming from "@/hooks/useStreaming";
 
-const DisplayStreaming = ({ roomId }) => {
+const DisplayStreaming = ({ roomId = 1234 }) => {
   const {
     localVideoRef,
     remoteFeeds,
