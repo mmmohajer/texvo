@@ -29,6 +29,8 @@ nat: {
   # Replace with your actual PUBLIC IP (from `curl ifconfig.me`)
   nat_1_1_mapping = "IP_ADDRESS_OR_DOMAIN"
 
+  full_trickle = true
+  
   # Optional: keep private candidates too
   # keep_private_host = true
 }
