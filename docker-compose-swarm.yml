@@ -202,9 +202,7 @@ services:
       --max-port=20100
       --no-stdout-log
   janus:
-    build:
-      dockerfile: Dockerfile
-      context: ./janus
+    image: ${JANUS_REPO}:${JANUS_VERSION}
     deploy:
       mode: replicated
       replicas: 1
