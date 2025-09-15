@@ -65,6 +65,10 @@ export API_VERSION=$api_ver
 export JANUS_VERSION=$janus_ver
 export CELERY_FLOWER_USER=$CELERY_FLOWER_USER
 export CELERY_FLOWER_PASSWORD=$CELERY_FLOWER_PASSWORD
+export COTURN_REALM=$COTURN_REALM
+export COTURN_USER=$COTURN_USER
+export COTURN_PASSWORD=$COTURN_PASSWORD
+export COTURN_EXTERNAL_IP=$COTURN_EXTERNAL_IP
 [ -f "docker-swarm.tmp.yml" ] && rm docker-swarm.tmp.yml
 envsubst < docker-compose-swarm.yml > docker-compose-swarm-tmp.yml
 docker build -t \$NGINX_REPO:\$NGINX_VERSION -f nginx/Dockerfile ./nginx && docker build -t \$CLIENT_REPO:\$CLIENT_VERSION -f client/Dockerfile ./client && docker build -t \$API_REPO:\$API_VERSION -f api/Dockerfile ./api && docker build -t \$JANUS_REPO:\$JANUS_VERSION -f janus/Dockerfile ./janus && docker push \$NGINX_REPO:\$NGINX_VERSION && docker push \$CLIENT_REPO:\$CLIENT_VERSION && docker push \$API_REPO:\$API_VERSION && docker push \$JANUS_REPO:\$JANUS_VERSION && docker stack deploy -c docker-compose-swarm-tmp.yml app --with-registry-auth
