@@ -183,7 +183,7 @@ services:
     #   - /etc/letsencrypt/live/turn.myapp.com:/etc/coturn/certs:ro  # <-- mount certs in production
 
   janus:
-    image: canyan/janus-gateway:latest
+    image: meetecho/janus-gateway:latest
     platform: linux/amd64
     restart: always
     ports:

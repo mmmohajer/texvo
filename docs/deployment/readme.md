@@ -363,6 +363,13 @@ Update the following files from their sample files:
 - `init-letsencrypt.sh`
 - `utils/assistances/backup_db_swarm.sh`
 
+Then create the following subfolders:
+
+```sh
+sudo mkdir -p volume_data/django_static/media
+sudo mkdir -p volume_data/django_static/media
+```
+
 ### 9.3. Set Executable Permissions
 
 ```sh
@@ -406,6 +413,7 @@ docker volume rm $(docker volume ls -q)
 2. Set permissions:
    ```sh
    sudo chown -R USERNAME:USERNAME /var/www/app
+   sudo chown -R USERNAME:docker /var/www/app/nginx/certbot
    ```
 3. Start the app with SSL:
    ```sh
