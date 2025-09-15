@@ -127,7 +127,7 @@ services:
 
   db:
     restart: always
-    image: postgres:13-alpine
+    image: ankane/pgvector:v0.5.1
     env_file:
       - ./secrets/db/.env
     ports:
