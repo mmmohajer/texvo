@@ -565,6 +565,24 @@ Redirect HTTP to HTTPS
 
 It's now time to onboard a new node
 
+On manager node:
+sudo rsync -aAXHv /var/www/app/ /home/USER_NAME/app_backup/
+
+sudo gluster volume stop app-volume force
+sudo gluster volume delete app-volume
+
+On the second node:
+sudo mkdir -p /gluster/brick1/app-volume
+sudo chown -R USER_NAME:USER_NAME /gluster/brick1
+
+On the first node:
+sudo gluster peer probe <NEW_NODE_IP>
+sudo gluster volume create app-volume replica 2 \
+174.138.93.141:/gluster/brick1/app-volume \
+159.89.36.202:/gluster/brick1/app-volume force
+
+sudo gluster volume start app-volume
+
 #### 11.2.2. Join Worker Nodes
 
 On each worker node:
