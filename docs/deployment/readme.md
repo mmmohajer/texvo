@@ -119,8 +119,6 @@ This document provides a comprehensive, step-by-step guide for deploying and har
 
 ---
 
----
-
 ## 2. SSH Key Authentication
 
 Switch to public/private key authentication for enhanced security.
@@ -166,8 +164,6 @@ ssh -i ~/.ssh/PRIVATE_SSH_KEY_NAME USER_NAME@IP_ADDRESS
 
 ---
 
----
-
 ## 3. SSH Config Alias (Local Machine)
 
 Create an alias for easier login:
@@ -188,8 +184,6 @@ Now you can login with:
 ```sh
 ssh myserver
 ```
-
----
 
 ---
 
@@ -227,8 +221,6 @@ sudo reboot
 
 ---
 
----
-
 ## 5. Install & Configure fail2ban
 
 ```sh
@@ -256,8 +248,6 @@ sudo cat fail2ban.log
 ```sh
 fail2ban-client set sshd unbanip IP_ADDRESS
 ```
-
----
 
 ---
 
@@ -325,16 +315,6 @@ ssh -T git@github.com
 sudo chown -R USER_NAME:USERNAME /var/www/app
 cd /var/www/app
 git clone SSH_REPO_URL .
-```
-
-Reload and enable the automated services:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable mount-glusterfs.service
-sudo systemctl start mount-glusterfs.service
-sudo systemctl enable glusterfs-watchdog
-sudo systemctl start glusterfs-watchdog
 ```
 
 ---
