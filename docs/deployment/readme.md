@@ -269,8 +269,6 @@ docker run hello-world
 
 ---
 
----
-
 ## 7. Git Configuration & SSH for GitHub
 
 **Set git config:**
@@ -306,70 +304,409 @@ ssh -T git@github.com
 
 ---
 
-## 8. GlusterFS Setup
-
-### 8.1 Install GlusterFS
+## 8. Clone the Repository
 
 ```sh
-sudo apt update
-sudo apt install glusterfs-server -y
-sudo systemctl start glusterd
-sudo systemctl enable glusterd
-sudo systemctl status glusterd
-sudo apt install glusterfs-client -y
-sudo mkdir -p /var/www/app/
-sudo chown -R USER_NAME:USER_NAME /var/www/app
-sudo mkdir -p /gluster/brick1/app-volume
+sudo chown -R USER_NAME:USERNAME /var/www/app
+cd /var/www/app
+git clone SSH_REPO_URL .
 ```
 
-You can create a snapshot of your server, to ignore repeating these setups for other nodes. After that let's continue to mount /var/www/app as follows:
+Reload and enable the automated services:
 
 ```sh
-sudo gluster volume create app-volume <NODE_IP>:/gluster/brick1/app-volume force
-sudo gluster volume start app-volume
-sudo mount -t glusterfs <NODE_IP>:/app-volume /var/www/app
-```
-
-##### (Optional) Auto-mount on Boot
-
-```sh
-sudo nano /etc/fstab
-```
-
-```
-<NEW_NODE_IP>:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
-```
-
-##### (Optional) Systemd Service for Mounting
-
-```sh
-sudo nano /etc/systemd/system/mount-glusterfs.service
-```
-
-```ini
-[Unit]
-Description=Mount GlusterFS Volume
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/mount -a
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable the service:
-
-```sh
+sudo systemctl daemon-reload
 sudo systemctl enable mount-glusterfs.service
+sudo systemctl start mount-glusterfs.service
+sudo systemctl enable glusterfs-watchdog
+sudo systemctl start glusterfs-watchdog
 ```
 
 ---
 
-#### GlusterFS Watchdog Service
+## 9. Application Setup
+
+### 9.1. Create Required Folders
+
+```sh
+mkdir -p ./api/vol/static ./api/vol/media ./db_backups ./volume_data volume_data/django_static/static volume_data/django_static/media
+```
+
+### 9.2. Update Configuration Files
+
+Update the following files from their sample files:
+
+Find the google processor ID from here:
+https://console.cloud.google.com/ai/document-ai/locations/us/processors/
+
+- `.env`
+- `secrets/api/.env`
+- `secrets/db/.env`
+- `secrets/pgbouncer/.env`
+- `secrets/secret_files/cloudflare.ini`
+- `secrets/secret_files/cred.json`
+- `client/next.config.js`
+- `redis/redis.conf`
+- `janus/janus.jcfg`
+- `nginx/configs/default.conf`
+- `init-letsencrypt.sh`
+- `utils/assistances/backup_db_swarm.sh`
+- `utils/shellScripting/funcs/secret_vars.sh`
+
+Update the following file in your local system:
+
+- `utils/shellScripting/funcs/secret_vars.sh`
+
+### 9.3. Set Executable Permissions
+
+```sh
+sudo chmod +x ./init-letsencrypt.sh
+sudo chmod +x /var/www/app/utils/assistances/backup_db_swarm.sh
+```
+
+### 9.4. Setup HTTP Basic Auth for Flower (Optional)
+
+```sh
+sudo apt-get install apache2-utils
+cd nginx
+htpasswd -c .htpasswd CELERY_FLOWER_USER
+# Use the CELERY_FLOWER_PASSWORD defined in your env variables
+```
+
+### 9.5. SSL Certificate Setup
+
+1. Create the following folders:
+   ```sh
+   mkdir -p ./nginx/certbot/conf/
+   mkdir -p ./nginx/certbot/www/
+   ```
+2. Add A records to your domain's DNS pointing to the server IP (including www as a CNAME).
+3. Run the script:
+   ```sh
+   sudo ./init-letsencrypt.sh
+   ```
+
+### 9.6. Clean Up Docker (Optional)
+
+```sh
+docker container rm -f $(docker container ls -a -q)
+docker image rm -f $(docker image ls -q)
+docker volume rm $(docker volume ls -q)
+```
+
+### 9.7. Test SSL Setup
+
+1. Update the domain in the server_name block of `default-temp-with-ssl.conf`.
+2. Set permissions:
+   ```sh
+   sudo chown -R USERNAME:USERNAME /var/www/app
+   sudo chown -R USERNAME:docker /var/www/app/nginx/certbot
+   ```
+3. Start the app with SSL:
+   ```sh
+   sudo docker compose -f docker-compose-temp-with-ssl.yml up --build -d
+   ```
+
+### 9.8. Production Deployment
+
+**With Compose:**
+
+```sh
+sudo docker compose -f docker-compose-prod.yml up --build -d
+```
+
+---
+
+## 10. Docker Swarm & GlusterFS Deployment
+
+### 10.1. Swarm Architecture Overview
+
+- **Basic:** 1 Manager Node, 2 Worker Nodes
+- **High Availability:** 3+ Manager Nodes (for quorum), 3+ Worker Nodes
+- **(Recommended)**: Use a load balancer in front of your managers for production.
+
+---
+
+### 10.2 📘 GlusterFS Deployment Guide
+
+Replicated Setup for `/var/www/app` with Data Migration, Persistence & Scaling\_
+
+---
+
+#### 10.2.1. 🎯 Objective
+
+- Share `/var/www/app` across multiple nodes using GlusterFS.
+- Ensure **real-time replication** of files, ownership, permissions, and executability.
+- Safely migrate existing data without hiding or losing it.
+- Configure persistent mounts across reboots.
+- Support scaling by adding new nodes in the future.
+
+---
+
+#### 10.2.2. Install GlusterFS
+
+On **all nodes**:
+
+```bash
+sudo apt update
+sudo apt install glusterfs-server -y
+sudo systemctl enable glusterd --now
+```
+
+Verify:
+
+```bash
+sudo systemctl status glusterd
+```
+
+Create the app directory on the node if not exists:
+
+```bash
+sudo mkdir -p /var/www/app/
+sudo chown -R USER_NAME:USER_NAME /var/www/app
+```
+
+---
+
+#### 10.2.3. Prepare Brick Directories
+
+On **each node**:
+
+```bash
+sudo mkdir -p /gluster/brick1
+sudo chown -R $USER:$USER /gluster/brick1
+```
+
+⚠️ Bricks must be **dedicated and empty**. Do not reuse a directory with existing data.
+
+---
+
+#### 10.2.4. Form the Trusted Pool
+
+On the **first (master) node**:
+
+```bash
+sudo gluster peer probe NODE2_IP
+sudo gluster peer probe NODE3_IP
+```
+
+Check:
+
+```bash
+sudo gluster peer status
+```
+
+---
+
+#### 10.2.5. Create a Replicated Volume
+
+On the **master node**:
+
+```bash
+sudo gluster volume create app-volume replica 2 NODE1_IP:/gluster/brick1 NODE2_IP:/gluster/brick1 force
+```
+
+- Use `replica 3` for three nodes.
+- Each node contributes one brick.
+
+Start the volume:
+
+```bash
+sudo gluster volume start app-volume
+sudo gluster volume info
+```
+
+---
+
+#### 10.2.6. Temporary Mount (Safe Migration)
+
+On the node holding the **original `/var/www/app` data**:
+
+```bash
+sudo mkdir -p /mnt/gluster_app
+sudo mount -t glusterfs NODE1_IP:/app-volume /mnt/gluster_app
+```
+
+---
+
+#### 10.2.7. Copy Existing Data Into GlusterFS
+
+On the same node:
+
+```bash
+sudo rsync -aAXHv /var/www/app/ /mnt/gluster_app/
+```
+
+This preserves:
+
+- Permissions
+- Ownership
+- Symlinks
+- Executability
+
+Now your data is inside GlusterFS and will replicate across all nodes.
+
+---
+
+#### 10.2.8. Switch the Real Mount
+
+1. Unmount the temporary mount:
+
+   ```bash
+   sudo umount /mnt/gluster_app
+   ```
+
+2. Mount GlusterFS at the application directory:
+   ```bash
+   sudo mount -t glusterfs NODE1_IP:/app-volume /var/www/app
+   ```
+
+At this point, **real-time replication is active**.
+
+---
+
+#### 10.2.9. Persistent Mounts via `/etc/fstab`
+
+On **all nodes**, edit `/etc/fstab`:
+
+```bash
+sudo nano /etc/fstab
+```
+
+Add the following line:
+
+```
+NODE1_IP,NODE2_IP:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
+```
+
+- Multiple IPs ensure high availability.
+- `_netdev` guarantees mount waits for network readiness.
+
+Apply immediately:
+
+```bash
+sudo mount -a
+```
+
+Verify:
+
+```bash
+mount | grep gluster
+```
+
+---
+
+#### 10.2.10. Test Replication
+
+On Node1:
+
+```bash
+touch /var/www/app/test_from_node1
+```
+
+On Node2:
+
+```bash
+ls -l /var/www/app/ | grep test_from_node1
+```
+
+✅ The file should appear instantly.
+
+---
+
+## 10.2.11. Monitoring & Healing
+
+- Volume status:
+  ```bash
+  sudo gluster volume status
+  ```
+- Heal check:
+  ```bash
+  sudo gluster volume heal app-volume info
+  ```
+- Force full heal if required:
+  ```bash
+  sudo gluster volume heal app-volume full
+  ```
+
+---
+
+#### 10.2.12 Adding a New Node (Scaling)
+
+##### 10.2.12.1 Install GlusterFS on the New Node
+
+```bash
+sudo apt update
+sudo apt install glusterfs-server -y
+sudo systemctl enable glusterd --now
+```
+
+###### 10.2.12.2. Prepare Brick Directory
+
+```bash
+sudo mkdir -p /gluster/brick1
+sudo chown -R $USER:$USER /gluster/brick1
+```
+
+⚠️ Must be **empty**.
+
+##### 10.2.12.3. Add Node to the Cluster
+
+From an existing node:
+
+```bash
+sudo gluster peer probe NODE3_IP
+sudo gluster peer status
+```
+
+##### 10.2.12.4. Expand the Volume
+
+Since the volume is currently `replica 2`, expand to `replica 3`:
+
+```bash
+sudo gluster volume add-brick app-volume replica 3 NODE3_IP:/gluster/brick1 force
+```
+
+Confirm:
+
+```bash
+sudo gluster volume info
+```
+
+It should show **Number of Bricks: 1 x 3 = 3**.
+
+##### 10.2.12.5. Trigger a Heal
+
+```bash
+sudo gluster volume heal app-volume full
+sudo gluster volume heal app-volume info
+```
+
+Wait until all entries are healed (`Number of entries: 0`).
+
+##### 10.2.12.6 Mount on the New Node
+
+On Node3:
+
+```bash
+sudo mkdir -p /var/www/app
+```
+
+Edit `/etc/fstab`:
+
+```
+NODE1_IP,NODE2_IP,NODE3_IP:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
+```
+
+Apply:
+
+```bash
+sudo mount -a
+```
+
+---
+
+#### 10.2.13. GlusterFS Watchdog Service
 
 ```sh
 sudo nano /etc/systemd/system/glusterfs-watchdog.service
@@ -395,292 +732,150 @@ sudo touch /var/log/glusterfs_watchdog.log
 sudo chmod 666 /var/log/glusterfs_watchdog.log
 ```
 
----
-
-## 9. Clone the Repository
-
-```sh
-sudo chown -R USER_NAME:USERNAME /var/www/app
-cd /var/www/app
-git clone SSH_REPO_URL .
-```
-
 Reload and enable the automated services:
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable mount-glusterfs.service
-sudo systemctl start mount-glusterfs.service
 sudo systemctl enable glusterfs-watchdog
 sudo systemctl start glusterfs-watchdog
 ```
 
 ---
 
-## 10. Application Setup
+#### ✅ Final Outcome
 
-### 10.1. Create Required Folders
-
-```sh
-mkdir -p ./api/vol/static ./api/vol/media ./db_backups ./volume_data volume_data/django_static/static volume_data/django_static/media
-```
-
-### 10.2. Update Configuration Files
-
-Update the following files from their sample files:
-
-Find the google processor ID from here:
-https://console.cloud.google.com/ai/document-ai/locations/us/processors/
-
-- `.env`
-- `secrets/api/.env`
-- `secrets/db/.env`
-- `secrets/pgbouncer/.env`
-- `secrets/secret_files/cloudflare.ini`
-- `secrets/secret_files/cred.json`
-- `client/next.config.js`
-- `redis/redis.conf`
-- `janus/janus.jcfg`
-- `nginx/configs/default.conf`
-- `init-letsencrypt.sh`
-- `utils/assistances/backup_db_swarm.sh`
-- `utils/shellScripting/funcs/secret_vars.sh`
-
-Update the following file in your local system:
-
-- `utils/shellScripting/funcs/secret_vars.sh`
-
-### 10.3. Set Executable Permissions
-
-```sh
-sudo chmod +x ./init-letsencrypt.sh
-sudo chmod +x /var/www/app/utils/assistances/backup_db_swarm.sh
-```
-
-### 10.4. Setup HTTP Basic Auth for Flower (Optional)
-
-```sh
-sudo apt-get install apache2-utils
-cd nginx
-htpasswd -c .htpasswd CELERY_FLOWER_USER
-# Use the CELERY_FLOWER_PASSWORD defined in your env variables
-```
-
-### 10.5. SSL Certificate Setup
-
-1. Create the following folders:
-   ```sh
-   mkdir -p ./nginx/certbot/conf/
-   mkdir -p ./nginx/certbot/www/
-   ```
-2. Add A records to your domain's DNS pointing to the server IP (including www as a CNAME).
-3. Run the script:
-   ```sh
-   sudo ./init-letsencrypt.sh
-   ```
-
-### 10.6. Clean Up Docker (Optional)
-
-```sh
-docker container rm -f $(docker container ls -a -q)
-docker image rm -f $(docker image ls -q)
-docker volume rm $(docker volume ls -q)
-```
-
-### 10.7. Test SSL Setup
-
-1. Update the domain in the server_name block of `default-temp-with-ssl.conf`.
-2. Set permissions:
-   ```sh
-   sudo chown -R USERNAME:USERNAME /var/www/app
-   sudo chown -R USERNAME:docker /var/www/app/nginx/certbot
-   ```
-3. Start the app with SSL:
-   ```sh
-   sudo docker compose -f docker-compose-temp-with-ssl.yml up --build -d
-   ```
-
-### 10.8. Production Deployment
-
-**With Compose:**
-
-```sh
-sudo docker compose -f docker-compose-prod.yml up --build -d
-```
+- `/var/www/app` is now a **replicated GlusterFS volume**.
+- Existing data safely migrated without being hidden.
+- Any change on one node instantly appears on all others.
+- Permissions and executability are preserved.
+- Mounts survive reboots automatically via `/etc/fstab`.
+- Cluster can be expanded by adding new nodes when needed.
 
 ---
 
-## 11. Docker Swarm & GlusterFS Deployment
+### 10.3. Swarm Cluster Setup
 
-### 11.1. Swarm Architecture Overview
-
-- **Basic:** 1 Manager Node, 2 Worker Nodes
-- **High Availability:** 3+ Manager Nodes (for quorum), 3+ Worker Nodes
-- **(Recommended)**: Use a load balancer in front of your managers for production.
+Docker Swarm is used to orchestrate and scale the services in this project.  
+This section covers initializing the Swarm, onboarding worker and manager nodes, and configuring load balancing.
 
 ---
 
-### 11.2. Swarm Cluster Setup
+#### 10.3.1. Initialize the Swarm Manager
 
-#### 11.2.1. Initialize Swarm on Manager
+1. On the designated manager node, initialize the Swarm cluster:
 
-```sh
-docker swarm init --advertise-addr <MANAGER_IP>
-```
+   ```sh
+   docker swarm init --advertise-addr <MANAGER_IP>
+   ```
 
-Go to docker hub and create 3 private repositories for the following services:
+2. Create **four private repositories** on Docker Hub for the following services:
 
-1. Client
-2. API
-3. NGINX
-4. Janus
+   - Client
+   - API
+   - NGINX
+   - Janus
 
-Go to utils/shellScripting/constants/constants.sh and update the repository name and server alias
+3. Update repository references:
 
-In the server run
+   - Edit `utils/shellScripting/constants/constants.sh`.
+   - Replace the placeholders with your Docker Hub repository names and server aliases.
 
-```sh
-docker login -u DOCKER_HUB_USER_NAME
-```
+4. Authenticate the manager node with Docker Hub:
 
-In the server:
+   ```sh
+   docker login -u <DOCKER_HUB_USERNAME>
+   ```
 
-```sh
-docker network rm app_default
-```
+5. Remove the default Docker Compose network (if present):
 
-Now use `automation.sh` to deploy automatically with swarm.
+   ```sh
+   docker network rm app_default
+   ```
 
-To make it scalable then create a load balancer in DO: (For simplicity Regioanl based):
+6. From your local machine, run the automation script to deploy the stack:
 
-Forwarding rules
-HTTP on port 80 HTTP on port 80
-HTTPS on port 443 HTTPS on port 443
+   ```sh
+   ./automation.sh
+   ```
 
-Health checks
-http://0.0.0.0:80/health
+---
 
-SSL
-Redirect HTTP to HTTPS
+#### 10.3.2. Configure Load Balancer (DigitalOcean Example)
 
-It's now time to onboard a new node
+To ensure scalability and high availability, configure a regional load balancer with the following settings:
 
-On manager node:
-sudo rsync -aAXHv /var/www/app/ /home/USER_NAME/app_backup/
+- **Forwarding Rules**
 
-sudo gluster volume stop app-volume force
-sudo gluster volume delete app-volume
+  - HTTP: port 80 → port 80
+  - HTTPS: port 443 → port 443
 
-On the second node:
-sudo mkdir -p /gluster/brick1/app-volume
-sudo chown -R USER_NAME:USER_NAME /gluster/brick1
+- **Health Checks**
 
-On the first node:
-sudo gluster peer probe <NEW_NODE_IP>
-sudo gluster volume create app-volume replica 2 \
-174.138.93.141:/gluster/brick1/app-volume \
-159.89.36.202:/gluster/brick1/app-volume force
+  - Protocol: HTTP
+  - Path: `/health`
+  - Port: 80
 
-sudo gluster volume start app-volume
+- **SSL Settings**
+  - Enable SSL certificate.
+  - Redirect all HTTP traffic to HTTPS.
 
-#### 11.2.2. Join Worker Nodes
+---
 
-On each worker node:
+#### 10.3.3. Join Worker Nodes
 
-```sh
-docker swarm join --token <WORKER_TOKEN> <MANAGER_IP>:2377
-```
+1. On each worker node, join the cluster:
 
-Get the join token from the manager:
+   ```sh
+   docker swarm join --token <WORKER_TOKEN> <MANAGER_IP>:2377
+   ```
 
-```sh
-docker swarm join-token worker
-```
+2. To retrieve the worker join token, run on the manager node:
 
-#### 11.2.3. Join Additional Manager Nodes (Optional)
+   ```sh
+   docker swarm join-token worker
+   ```
 
-On the primary manager node, get the manager token:
+---
 
-```sh
-docker swarm join-token manager
-```
+#### 10.3.4. Add Additional Manager Nodes (Optional)
 
-On the new manager node:
+1. On the primary manager node, retrieve the manager join token:
 
-```sh
-docker swarm join --token <MANAGER_TOKEN> <MANAGER_IP>:2377
-```
+   ```sh
+   docker swarm join-token manager
+   ```
 
-#### 11.2.4. Verify Cluster
+2. On the new manager node, join the cluster as a manager:
 
-On any manager node:
+   ```sh
+   docker swarm join --token <MANAGER_TOKEN> <MANAGER_IP>:2377
+   ```
+
+---
+
+#### 10.3.5. Verify Cluster Status
+
+On any manager node, list all nodes and confirm their roles and statuses:
 
 ```sh
 docker node ls
 ```
 
----
-
-## 11.3. Onboarding a New Node
-
-When you add another server to the GlusterFS cluster, do the steps done in section 8 for volume mounting on the new node
-
-### 11.3.1. Probe the New Node (from an existing node)
-
-```bash
-sudo gluster peer probe <NEW_NODE_IP>
-sudo gluster volume add-brick app-volume <NEW_NODE_IP>:/gluster/brick1/app-volume force
-sudo gluster volume rebalance app-volume start
-sudo gluster volume rebalance app-volume status
-```
-
-Then on the new node:
-
-```bash
-sudo mount -t glusterfs <ANY_EXISTING_NODE_IP>:/app-volume /var/www/app
-```
-
-Then automate it on reboot:
-
-```bash
-sudo nano /etc/fstab
-```
-
-```ini
-<ANY_EXISTING_NODE_IP>:/app-volume /var/www/app glusterfs defaults,_netdev 0 0
-```
-
-```bash
-sudo find /var/www/app -type d -user mmmohajer -group docker -exec ls -ld {} \;
-sudo find /var/www/app -type d -user mmmohajer -group docker -exec chown -R mmmohajer:mmmohajer {} \;
-
-```
-
-sudo chown -R mmmohajer:mmmohajer /var/www/app
-sudo chown -R mmmohajer:certbot /var/www/app/nginx/certbot
-
-### 11.3.2. Expand the Volume (if adding replicas)
-
-```bash
-sudo gluster volume create app-volume replica <REPLICA_COUNT> \
-  <NODE1_IP>:/gluster/brick1 \
-  <NODE2_IP>:/gluster/brick1 \
-  ... \
-  force
-sudo gluster volume start app-volume
-sudo gluster volume info
-```
-
-## ✅ Final Checklist
-
-- GlusterFS running across all nodes.
-- App volume mounted automatically at boot.
-- Backup restored into `/var/www/app`.
-- Watchdog ensures recovery if Gluster goes down.
+- Managers are marked with `Leader` or `Reachable`.
+- Workers show `Active`.
 
 ---
 
-### 11.5. Useful Docker Swarm Commands
+#### ✅ Outcome
+
+- A Docker Swarm cluster is initialized with one or more managers.
+- Worker nodes are joined successfully.
+- Services can be deployed and scaled across the cluster.
+- The load balancer ensures traffic distribution, health checks, and SSL termination.
+
+---
+
+### 10.4. Useful Docker Swarm Commands
 
 - **List nodes:**
   ```sh
@@ -722,7 +917,7 @@ sudo gluster volume info
 
 ---
 
-## 12. Continuous Integration & Continuous Deployment (CI/CD)
+## 11. Continuous Integration & Continuous Deployment (CI/CD)
 
 CI/CD (Continuous Integration and Continuous Deployment) is a set of practices that automate the process of integrating code changes, testing, and deploying applications. This ensures that new features, bug fixes, and updates can be delivered to users quickly, reliably, and with minimal manual intervention. In this project, you can use the provided automation script to streamline your deployment process.
 
