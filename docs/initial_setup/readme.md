@@ -89,11 +89,15 @@ Copy and rename sample `.env` files:
 **If using Docker:**
 
 ```bash
+cp .env.sample .env
 cp secrets/api/.env.sample secrets/api/.env
 cp secrets/db/.env.sample secrets/db/.env
 cp secrets/pgbouncer/.env.sample secrets/pgbouncer/.env
 cp redis/redis.conf.sample redis/redis.conf
 cp client/next.config.sample.js client/next.config.js
+cp janus/janus.jcfg.sample janus/janus.jcfg
+mkdir -p secrets/secret_files
+touch secrets/secret_files/cred.json
 ```
 
 **If not using Docker:**
